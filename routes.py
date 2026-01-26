@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException 
+from fastapi import APIRouter, HTTPException, Path
 from schemas import TodoCreate, Todo
 from database import todos_db
 import uuid
 import logging
-
+from uuid import UUID
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -21,3 +21,12 @@ async def create_todo(todo: TodoCreate, description="to create todo"):
         raise HTTPException(status_code=500, detail="Failed to add todo")
     logger.info(f"Creating todo with id: {todo_id}")
     return new_todo
+
+
+@router.get("/todos/{todo_id}", status_code=200, response_model=Todo)
+def get_todo(todo_id: UUID = Path(..., description="The ID of the todo to retrieve")):
+    
+    for todo in todos_db:
+        if todo.id and todo.id==todo_id:
+            return todo
+    raise HTTPException(status_code=404, detail="not todo existed")
