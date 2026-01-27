@@ -15,3 +15,9 @@ class Todo(TodoBase):
     
 class TodoStatusUpdate(BaseModel):
     completed: bool
+    
+    
+class TodoUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    completed: bool | None = None
