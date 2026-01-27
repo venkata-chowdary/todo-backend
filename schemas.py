@@ -12,3 +12,6 @@ class TodoCreate(TodoBase):
 
 class Todo(TodoBase):
     id: UUID
+    
+class TodoStatusUpdate(BaseModel):
+    completed: bool
