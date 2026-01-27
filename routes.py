@@ -1,8 +1,15 @@
-from fastapi import APIRouter, HTTPException, Path, Query
-from schemas import TodoCreate, Todo
-from database import todos_db
+from fastapi import APIRouter, HTTPException, Path, Query, Depends
+from sqlmodel.ext.asyncio.session import AsyncSession
+
+from schemas import TodoCreate
+from models import Todo
+
+from database_demo import todos_db
+from helper import save
 import uuid
+
 from typing import Optional
+from db import get_session
 
 import logging
 from uuid import UUID
@@ -13,24 +20,36 @@ logger = logging.getLogger(__name__)
 router=APIRouter()
 
 @router.post("/todos", status_code=201,  response_model=Todo)
-async def create_todo(todo: TodoCreate, description="to create todo"):
-    todo_id=uuid.uuid4()
-    new_todo= Todo(id= todo_id, **todo.dict())
-    prev_length=len(todos_db)
-    todos_db.append(new_todo)
+async def create_todo(
+    todo: TodoCreate, 
+    description="to create todo", 
+    session: AsyncSession= Depends(get_session)
+    ):
     
-    if prev_length + 1 !=len(todos_db):
-        raise HTTPException(status_code=500, detail="Failed to add todo")
-    logger.info(f"Creating todo with id: {todo_id}")
-    return new_todo
+    new_todo = Todo(**todo.dict())
+    logger.info(f"new todo created.")
+    return await save(session ,new_todo)
+
 
 
 @router.get("/todos/{todo_id}", status_code=200, response_model=Todo)
-async def get_todo(todo_id: UUID = Path(..., description="The ID of the todo to retrieve")):
-    for todo in todos_db:
-        if todo.id and todo.id==todo_id:
-            return todo
-    raise HTTPException(status_code=404, detail="not todo existed")
+async def get_todo(todo_id: UUID = Path(..., description="The ID of the todo to retrieve"), session: AsyncSession=Depends(get_session)):
+    todo=await session.get(Todo, todo_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="not todo existed")
+    return todo
+
+@router.delete("/todos/{todo_id}")
+async def delete_todo(todo_id: UUID = Path(..., description="ID of todo to delete"), session: AsyncSession=Depends(get_session)):
+    exsisting_todo=await session.get(Todo, todo_id)
+    if not exsisting_todo:
+        raise HTTPException(status_code=404, detail="Todo not found to delete")
+    await session.delete(exsisting_todo)
+    await session.commit()
+    return {"ok": True}        
+
+
+
 
 @router.put("/todos/{todo_id}", response_model=Todo)
 async def update_todo(
@@ -47,15 +66,6 @@ async def update_todo(
             return todo
 
     raise HTTPException(status_code=404, detail="Todo not found")
-
-@router.delete("/todos/{todo_id}")
-async def delete_todo(todo_id: UUID = Path(..., description="ID of todo to delete")):
-    for index, todo in enumerate(todos_db):
-        if todo_id==todo.id:
-            deleted_todo=todos_db.pop(index)
-            return deleted_todo
-        
-    raise HTTPException(status_code=404, detail="Todo not found to delete")
 
 
 @router.get("/todos", status_code=200)
