@@ -6,3 +6,4 @@ class Todo(SQLModel, table=True):
     title: str = Field(index=True)
     description: str | None = None
     completed: bool = False
+    user_id: uuid.UUID = Field(foreign_key="user.id")

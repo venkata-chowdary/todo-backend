@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, Path, Query, Depends
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select, func, asc, desc
-from schemas import TodoCreate, TodoUpdate
-from models import Todo
-from helper import save
+from app.schemas import TodoCreate, TodoUpdate
+from app.auth.dependencies import get_current_user
+from app.models import Todo
+from app.helper import save
 from typing import Optional
-from db import get_session
+from app.db import get_session
 
 import logging
 from uuid import UUID
@@ -23,10 +24,11 @@ redis_client = Redis(host='localhost', port=6379, db=0)
 async def create_todo(
     todo: TodoCreate, 
     description="to create todo", 
+    user = Depends(get_current_user),
     session: AsyncSession= Depends(get_session)
     ):
     
-    new_todo = Todo(**todo.dict())
+    new_todo = Todo(user_id=user.id, **todo.dict(),)
     logger.info(f"new todo created.")
     return await save(session ,new_todo)
 
