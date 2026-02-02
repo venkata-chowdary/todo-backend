@@ -8,7 +8,8 @@ from app.helper import save
 from typing import Optional
 from app.db import get_session
 from app.ai.background import save_analysed_data
-
+from app.helper import generate_task_hash
+from datetime import date
 import logging
 from uuid import UUID
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +30,10 @@ async def create_todo(
     user = Depends(get_current_user),
     session: AsyncSession= Depends(get_session),
     ):
+    task_hash=generate_task_hash(title=todo.title, description=todo.description)
+    key=f"ai:task_aanalysis:{task_hash}"
+    cached_todo=await redis_client.get(key)
+
     new_todo = Todo(
         user_id=user.id,
         **todo.dict(),
@@ -39,12 +44,26 @@ async def create_todo(
     await session.commit()
     await session.refresh(new_todo)
     
-    background_tasks.add_task(
+    if cached_todo:
+        print("getting ticket data from cached memeory")
+        ai_data = json.loads(cached_todo)
+        
+        new_todo.priority=ai_data['priority']
+        if ai_data["suggested_due_date"]:
+            new_todo.suggested_due_date = date.fromisoformat(ai_data["suggested_due_date"])
+        else:
+            new_todo.suggested_due_date = None        
+        new_todo.category=ai_data['category']
+        
+        await session.commit()
+    else:
+        background_tasks.add_task(
         save_analysed_data,
         new_todo.id,
         new_todo.title,
-        new_todo.description
-    ) 
+        new_todo.description,
+        key
+        )
     logger.info(f"new todo created.")
     return new_todo
 
