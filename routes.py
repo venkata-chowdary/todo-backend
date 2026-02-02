@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Path, Query, Depends
+from fastapi import APIRouter, HTTPException, Path, Query, Depends, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select, func, asc, desc
 from app.schemas import TodoCreate, TodoUpdate
@@ -7,6 +7,7 @@ from app.models import Todo
 from app.helper import save
 from typing import Optional
 from app.db import get_session
+from app.ai.background import save_analysed_data
 
 import logging
 from uuid import UUID
@@ -23,14 +24,30 @@ redis_client = Redis(host='localhost', port=6379, db=0)
 @router.post("/todos", status_code=201,  response_model=Todo)
 async def create_todo(
     todo: TodoCreate, 
+    background_tasks : BackgroundTasks,
     description="to create todo", 
     user = Depends(get_current_user),
-    session: AsyncSession= Depends(get_session)
+    session: AsyncSession= Depends(get_session),
     ):
+    new_todo = Todo(
+        user_id=user.id,
+        **todo.dict(),
+        ai_generated=False
+    )
+
+    session.add(new_todo)
+    await session.commit()
+    await session.refresh(new_todo)
     
-    new_todo = Todo(user_id=user.id, **todo.dict(),)
+    background_tasks.add_task(
+        save_analysed_data,
+        new_todo.id,
+        new_todo.title,
+        new_todo.description
+    ) 
     logger.info(f"new todo created.")
-    return await save(session ,new_todo)
+    return new_todo
+
 
 @router.post("/todos/bulk", status_code=201)
 async def create_multiple_todos(

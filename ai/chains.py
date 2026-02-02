@@ -7,8 +7,9 @@ from app.ai.schemas import TaskAIAnalysis
 
 parser=PydanticOutputParser(pydantic_object=TaskAIAnalysis)
 
-llm=get_llm()
 def initialize_chain():
+    
+    llm=get_llm()
     prompt = TASK_ANALYSIS_PROMPT.partial(
         format_instructions=parser.get_format_instructions()
     )

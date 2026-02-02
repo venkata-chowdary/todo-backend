@@ -1,6 +1,14 @@
 from langchain_google_genai import GoogleGenerativeAI
-from dotenv import load_dotenv
+import os
 
-load_dotenv()
 def get_llm():
-    return GoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.9)
+    api_key = os.getenv("GOOGLE_API_KEY")
+
+    if not api_key:
+        raise RuntimeError("GOOGLE_API_KEY not found in environment")
+
+    return GoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        temperature=0.9,
+        api_key=api_key
+    )

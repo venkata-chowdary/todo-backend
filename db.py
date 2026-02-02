@@ -10,17 +10,18 @@ DATABASE_URL = "postgresql+asyncpg://neondb_owner:npg_zFRe2oZ9PEaV@ep-hidden-lab
 engine = create_async_engine(
     DATABASE_URL,
     echo=True,
-    connect_args={"ssl": True}
+    connect_args={"ssl": True},
+    pool_pre_ping=True, 
 )
 
 # Async Session factory
-async_session = sessionmaker(
+async_session_factory = sessionmaker(
     engine, class_=AsyncSession, expire_on_commit=False
 )
 
 # Dependency for FastAPI
 async def get_session() -> AsyncSession:
-    async with async_session() as session:
+    async with async_session_factory() as session:
         yield session
 
 # Initialize tables

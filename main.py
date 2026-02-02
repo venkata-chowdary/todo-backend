@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from app.routes import router
 from app.auth.routes import router as auth_router
 from app.db import init_db
+from dotenv import load_dotenv
+load_dotenv() 
 
 app=FastAPI()
 app.include_router(router)
