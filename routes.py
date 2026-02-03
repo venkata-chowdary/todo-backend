@@ -1,13 +1,14 @@
 from fastapi import APIRouter, HTTPException, Path, Query, Depends, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select, func, asc, desc
-from app.schemas import TodoCreate, TodoUpdate
+from app.schemas import TodoCreate, TodoUpdate, NLTodoRequest
 from app.auth.dependencies import get_current_user
 from app.models import Todo
 from app.helper import save
 from typing import Optional
 from app.db import get_session
 from app.ai.background import save_analysed_data
+from app.ai.service import parse_nl_todo
 from app.helper import generate_task_hash
 from datetime import date
 from app.ai.background import store_vector_emd
@@ -134,6 +135,7 @@ async def delete_todo(todo_id: UUID = Path(..., description="ID of todo to delet
     await session.commit()
     return {"ok": True}        
 
+
 @router.put("/todos/{todo_id}", response_model=Todo)
 async def update_todo(
     todo_id: UUID = Path(..., description="id of the todo to update"),
@@ -160,6 +162,7 @@ async def update_todo_status(todo_id: UUID,session: AsyncSession=Depends(get_ses
     await session.commit()
     await session.refresh(exsisting_todo)
     return exsisting_todo
+    
     
 @router.get("/todos", status_code=200)
 async def get_todos(
@@ -202,6 +205,47 @@ async def get_todos(
     logger.info("Saving TODOS response to Redis Cache")
     return response_data
 
+
+@router.post("/todos/nl", status_code=201, response_model=Todo)
+async def create_nl_todo(
+    payload: NLTodoRequest,
+    background_tasks : BackgroundTasks,
+    description= "to create todo using natural language",
+    user = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    result=await parse_nl_todo(user_input=payload.input)
+    
+    new_todo= Todo(
+        user_id = user.id,
+        ai_generated=True,
+        title = result.title,
+        description = result.description
+    )
+    
+    session.add(new_todo)
+    await session.commit()
+    await session.refresh(new_todo)
+    
+    task_hash=generate_task_hash(title=new_todo.title, description=new_todo.description)
+    key=f"ai:task_aanalysis:{task_hash}"
+    background_tasks.add_task(
+        save_analysed_data,
+        new_todo.id,
+        new_todo.title,
+        new_todo.description,
+        key
+    )
+    
+    logger.info(f"new todo created.")
+
+    background_tasks.add_task(
+        store_vector_emd,
+        new_todo.title,
+        new_todo.description,
+        new_todo.id,
+    )
+    return new_todo
 
 # from app.ai.embeddings import generate_embedding
 # from app.ai.vector_store import collection
