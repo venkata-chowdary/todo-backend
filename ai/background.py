@@ -3,6 +3,9 @@ from app.ai.service import analyze_task
 from uuid import UUID
 from app.db import async_session_factory
 from redis.asyncio import Redis
+from app.ai.embeddings import generate_embedding
+from app.ai.vector_store import collection
+
 import json
 redis_client = Redis(host='localhost', port=6379, db=0)
 
@@ -35,3 +38,23 @@ async def save_analysed_data(todo_id:UUID, title: str, description: str, cache_k
         )
 
         await session.commit()
+
+
+async def store_vector_emd(title: str, description: str, todo_id:UUID):
+    print("converting and saving todo as vector")
+    combined_text = f"{title} . {description or ''}"
+    emd=await generate_embedding(combined_text)
+        
+    collection.add(
+    ids=[str(todo_id)],
+    embeddings=[emd],
+    documents=[combined_text],
+    metadatas=[{
+        "source": "todo"
+    }])
+    return {
+        "message": "Embedding stored successfully",
+        "text": combined_text,
+        "embedding_length": len(emd)
+    }
+    

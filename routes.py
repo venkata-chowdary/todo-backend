@@ -10,7 +10,9 @@ from app.db import get_session
 from app.ai.background import save_analysed_data
 from app.helper import generate_task_hash
 from datetime import date
+from app.ai.background import store_vector_emd
 import logging
+import json
 from uuid import UUID
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,25 +67,41 @@ async def create_todo(
         key
         )
     logger.info(f"new todo created.")
+    
+    
+    background_tasks.add_task(
+    store_vector_emd,
+    new_todo.title,
+    new_todo.description,
+    new_todo.id,
+    )
+
     return new_todo
 
 
-@router.post("/todos/bulk", status_code=201)
-async def create_multiple_todos(
-    count: int = 100,
-    session: AsyncSession = Depends(get_session)
+# @router.post("/todos/bulk", status_code=201)
+# async def create_multiple_todos(
+#     count: int = 100,
+#     session: AsyncSession = Depends(get_session)
+# ):
+#     todos_created = []
+
+#     for i in range(1, count + 1):
+#         todo_obj = TodoCreate(title=f"Todo {i}", description=f"Auto generated todo {i}")
+#         new_todo = Todo(**todo_obj.dict())
+#         saved = await save(session, new_todo)  # your existing save logic
+#         todos_created.append(saved)
+
+#     return {"message": f"{count} todos created.", "todos": todos_created}
+
+from app.ai.search import semantic_search
+@router.get("/todos/semantic-search")
+async def semantic_search_todos(
+    query: str,
+    limit: int = 5
 ):
-    todos_created = []
-
-    for i in range(1, count + 1):
-        todo_obj = TodoCreate(title=f"Todo {i}", description=f"Auto generated todo {i}")
-        new_todo = Todo(**todo_obj.dict())
-        saved = await save(session, new_todo)  # your existing save logic
-        todos_created.append(saved)
-
-    return {"message": f"{count} todos created.", "todos": todos_created}
-
-import json
+    results = await semantic_search(query, limit)
+    return results
 
 @router.get("/todos/{todo_id}", status_code=200, response_model=Todo)
 async def get_todo(todo_id: UUID = Path(..., description="The ID of the todo to retrieve"), session: AsyncSession=Depends(get_session)):
@@ -107,7 +125,6 @@ async def get_todo(todo_id: UUID = Path(..., description="The ID of the todo to 
     logger.info("Saving Todo to Redis Cache")
     return todo
 
-
 @router.delete("/todos/{todo_id}")
 async def delete_todo(todo_id: UUID = Path(..., description="ID of todo to delete"), session: AsyncSession=Depends(get_session)):
     exsisting_todo=await session.get(Todo, todo_id)
@@ -116,7 +133,6 @@ async def delete_todo(todo_id: UUID = Path(..., description="ID of todo to delet
     await session.delete(exsisting_todo)
     await session.commit()
     return {"ok": True}        
-
 
 @router.put("/todos/{todo_id}", response_model=Todo)
 async def update_todo(
@@ -185,3 +201,27 @@ async def get_todos(
     await redis_client.set(key, str(response_data), ex=600)
     logger.info("Saving TODOS response to Redis Cache")
     return response_data
+
+
+# from app.ai.embeddings import generate_embedding
+# from app.ai.vector_store import collection
+# from uuid import uuid4
+# @router.post("/test/embedding/add")
+# async def test_add_embedding(
+#     text: str
+# ):
+#     embedding = await generate_embedding(text)
+
+#     collection.add(
+#     ids=[str(uuid4())],
+#     embeddings=[embedding],
+#     documents=[text],        # ✅ this is the todo
+#     metadatas=[{
+#         "source": "todo"
+#     }])
+#     return {
+#         "message": "Embedding stored successfully",
+#         "text": text,
+#         "embedding_length": len(embedding)
+#     }
+
