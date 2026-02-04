@@ -215,27 +215,3 @@ This project highlights **practical GenAI engineering skills**, including:
 * Rate limiting for AI endpoints
 * Conversational task assistant
 
----
-
-## 🎯 Ideal For
-
-* **GenAI / AI Engineer roles**
-* Backend roles with AI focus
-* Demonstrating real-world LLM system design
-
----
-
-### ✅ Recruiter TL;DR
-
-> *“A production-style FastAPI backend demonstrating structured LLM pipelines, background AI processing, vector search with ChromaDB, Redis caching, and natural language task interfaces.”*
-
----
-
-If you want, next I can:
-
-* Convert this into **resume bullet points**
-* Create a **system design diagram**
-* Help you answer **interview questions** using this project
-* Optimize this README for **ATS keywords**
-
-Just tell me what you want next.

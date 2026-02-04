@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Path, Query, Depends, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlalchemy import select, func, asc, desc
-from app.schemas import TodoCreate, TodoUpdate, NLTodoRequest
+from app.schemas import TodoCreate, TodoUpdate, NLTodoRequest, TodoCreateResponse
 from app.auth.dependencies import get_current_user
 from app.models import Todo
 from app.helper import save
@@ -25,7 +25,7 @@ router=APIRouter()
 from redis.asyncio import Redis
 redis_client = Redis(host='localhost', port=6379, db=0)
 
-@router.post("/todos", status_code=201,  response_model=Todo)
+@router.post("/todos", status_code=201,  response_model=TodoCreateResponse)
 async def create_todo(
     todo: TodoCreate, 
     background_tasks : BackgroundTasks,
@@ -33,10 +33,11 @@ async def create_todo(
     user = Depends(get_current_user),
     session: AsyncSession= Depends(get_session),
     ):
-    task_hash=generate_task_hash(title=todo.title, description=todo.description)
-    key=f"ai:task_aanalysis:{task_hash}"
-    cached_todo=await redis_client.get(key)
-
+    
+    #check duplicate
+    duplicate=await check_duplicate(todo.title, todo.description)
+    
+    #create todo
     new_todo = Todo(
         user_id=user.id,
         **todo.dict(),
@@ -47,6 +48,10 @@ async def create_todo(
     await session.commit()
     await session.refresh(new_todo)
     
+    task_hash=generate_task_hash(title=todo.title, description=todo.description)
+    key=f"ai:task_analysis:{task_hash}"
+    cached_todo=await redis_client.get(key)
+
     if cached_todo:
         print("getting ticket data from cached memeory")
         ai_data = json.loads(cached_todo)
@@ -77,8 +82,10 @@ async def create_todo(
     new_todo.id,
     )
 
-    return new_todo
-
+    return {
+        "todo": new_todo,
+        "duplicate_warning": duplicate
+    }
 
 # @router.post("/todos/bulk", status_code=201)
 # async def create_multiple_todos(
@@ -247,25 +254,13 @@ async def create_nl_todo(
     )
     return new_todo
 
-# from app.ai.embeddings import generate_embedding
-# from app.ai.vector_store import collection
-# from uuid import uuid4
-# @router.post("/test/embedding/add")
-# async def test_add_embedding(
-#     text: str
-# ):
-#     embedding = await generate_embedding(text)
+from app.ai.embeddings import generate_embedding
+from app.ai.vector_store import collection
+from app.ai.duplicate import check_duplicate
 
-#     collection.add(
-#     ids=[str(uuid4())],
-#     embeddings=[embedding],
-#     documents=[text],        # ✅ this is the todo
-#     metadatas=[{
-#         "source": "todo"
-#     }])
-#     return {
-#         "message": "Embedding stored successfully",
-#         "text": text,
-#         "embedding_length": len(embedding)
-#     }
-
+from uuid import uuid4
+@router.post("/test")
+async def test_add_embedding():
+    
+    result=await check_duplicate()    
+    print(result)
